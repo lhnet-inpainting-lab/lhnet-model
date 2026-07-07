@@ -1,0 +1,41 @@
+import numpy as np
+import random
+
+def generate_mask_circle_random_size(H, W):
+    """
+    바운딩 박스로부터 랜덤 크기의 동그라미 모양의 마스크를 생성합니다.
+
+    Args:
+        H (int): 마스크의 높이
+        W (int): 마스크의 너비
+
+    Returns:
+        np.array: 형상이 (1, H, W, 1)인 마스크 어레이
+    """
+    mask = np.zeros((1, H, W, 1), dtype=np.float32)  # 빈 마스크 생성
+
+    # 원의 중심 좌표 설정
+    cx, cy = W // 2, H // 2
+
+    # 반지름을 랜덤으로 선택
+    min_radius = min(W, H) // 8
+    max_radius = min(W, H) // 4
+    radius = random.randint(min_radius, max_radius)
+
+    # 원 그리기
+    for y in range(H):
+        for x in range(W):
+            if (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2:
+                mask[:, y, x, :] = 1
+
+    # 마스크의 형태 수정
+    return mask
+
+# 입력 이미지의 크기를 가져옵니다.
+img_shape = FLAGS.img_shapes
+height = img_shape[0]  # 이미지의 높이
+width = img_shape[1]  # 이미지의 너비
+
+# 마스크 생성
+mask = generate_mask_circle_random_size(height, width)
+return mask  # 마스크 반환
