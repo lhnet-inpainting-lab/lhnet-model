@@ -11,7 +11,7 @@ import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
-from detect import detect_faces
+from detect import boxes_to_mask, detect_faces
 from engine import load_engine
 from segment import grabcut_at
 
@@ -53,6 +53,28 @@ async def detect(image: UploadFile = File(...)):
     img = _decode(await image.read(), cv2.IMREAD_COLOR)
     detections = detect_faces(img)
     return {"width": img.shape[1], "height": img.shape[0], "detections": detections}
+
+
+@app.post("/redact")
+async def redact(image: UploadFile = File(...)):
+    """원콜 비식별화: 얼굴 탐지 → 마스크 → 인페인팅 복원까지 한 번에 처리한다."""
+    img = _decode(await image.read(), cv2.IMREAD_COLOR)
+    detections = detect_faces(img)
+
+    if detections:
+        mask = boxes_to_mask(img.shape[:2], [d["box"] for d in detections])
+        result = engine.inpaint(img, mask)
+    else:
+        result = img
+
+    ok, encoded = cv2.imencode(".png", result)
+    if not ok:
+        raise HTTPException(status_code=500, detail="결과 인코딩에 실패했습니다.")
+    return Response(
+        content=encoded.tobytes(),
+        media_type="image/png",
+        headers={"X-Redacted-Count": str(len(detections))},
+    )
 
 
 @app.post("/segment")
