@@ -1,7 +1,8 @@
 """개인정보 객체 자동 탐지.
 
-YuNet(OpenCV 공식 경량 얼굴 탐지 ONNX, 232KB)으로 얼굴을 찾는다.
-GPU 없이 CPU에서 수십 ms 수준. 번호판·텍스트 탐지는 이후 모델 추가 예정.
+- 얼굴: YuNet(OpenCV 공식 경량 ONNX, 232KB) — CPU 수십 ms
+- 번호판: OpenCV 내장 캐스케이드(베타) — 추가 의존성 없음
+텍스트(주민번호 등) 탐지는 OCR 모델 추가 예정.
 """
 
 import os
@@ -45,6 +46,34 @@ def detect_faces(image_bgr: np.ndarray) -> list[dict]:
                 "score": round(float(f[-1]), 3),
             })
     return out
+
+
+_plate_cascade = None
+
+
+def _get_plate_cascade():
+    global _plate_cascade
+    if _plate_cascade is None:
+        _plate_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_russian_plate_number.xml"
+        )
+    return _plate_cascade
+
+
+def detect_plates(image_bgr: np.ndarray) -> list[dict]:
+    """차량 번호판 후보 목록(베타). 캐스케이드 기반이라 score는 고정값."""
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    with _lock:
+        plates = _get_plate_cascade().detectMultiScale(gray, scaleFactor=1.08, minNeighbors=5, minSize=(50, 16))
+    return [
+        {"type": "plate", "box": [int(x), int(y), int(w), int(h)], "score": 0.5}
+        for x, y, w, h in (plates if plates is not None else [])
+    ]
+
+
+def detect_all(image_bgr: np.ndarray) -> list[dict]:
+    """얼굴 + 번호판 통합 탐지."""
+    return detect_faces(image_bgr) + detect_plates(image_bgr)
 
 
 def boxes_to_mask(shape_hw: tuple, boxes: list, margin: float = 0.25) -> np.ndarray:

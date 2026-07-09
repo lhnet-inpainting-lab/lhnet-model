@@ -11,7 +11,7 @@ import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
-from detect import boxes_to_mask, detect_faces
+from detect import boxes_to_mask, detect_all
 from engine import load_engine
 from segment import grabcut_at
 
@@ -49,17 +49,17 @@ async def inpaint(image: UploadFile = File(...), mask: UploadFile = File(...)):
 
 @app.post("/detect")
 async def detect(image: UploadFile = File(...)):
-    """사진 속 개인정보 객체(얼굴)를 탐지해 좌표 목록을 반환한다."""
+    """사진 속 개인정보 객체(얼굴·번호판)를 탐지해 좌표 목록을 반환한다."""
     img = _decode(await image.read(), cv2.IMREAD_COLOR)
-    detections = detect_faces(img)
+    detections = detect_all(img)
     return {"width": img.shape[1], "height": img.shape[0], "detections": detections}
 
 
 @app.post("/redact")
 async def redact(image: UploadFile = File(...)):
-    """원콜 비식별화: 얼굴 탐지 → 마스크 → 인페인팅 복원까지 한 번에 처리한다."""
+    """원콜 비식별화: 얼굴·번호판 탐지 → 마스크 → 인페인팅 복원까지 한 번에 처리한다."""
     img = _decode(await image.read(), cv2.IMREAD_COLOR)
-    detections = detect_faces(img)
+    detections = detect_all(img)
 
     if detections:
         mask = boxes_to_mask(img.shape[:2], [d["box"] for d in detections])
