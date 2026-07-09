@@ -11,6 +11,7 @@ import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
+from detect import detect_faces
 from engine import load_engine
 from segment import grabcut_at
 
@@ -44,6 +45,14 @@ async def inpaint(image: UploadFile = File(...), mask: UploadFile = File(...)):
     if not ok:
         raise HTTPException(status_code=500, detail="결과 인코딩에 실패했습니다.")
     return Response(content=encoded.tobytes(), media_type="image/png")
+
+
+@app.post("/detect")
+async def detect(image: UploadFile = File(...)):
+    """사진 속 개인정보 객체(얼굴)를 탐지해 좌표 목록을 반환한다."""
+    img = _decode(await image.read(), cv2.IMREAD_COLOR)
+    detections = detect_faces(img)
+    return {"width": img.shape[1], "height": img.shape[0], "detections": detections}
 
 
 @app.post("/segment")
