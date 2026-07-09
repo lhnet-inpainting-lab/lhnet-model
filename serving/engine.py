@@ -66,9 +66,64 @@ class OpenCVEngine:
         return cv2.inpaint(image_bgr, binary_mask, inpaintRadius=7, flags=cv2.INPAINT_TELEA)
 
 
+class LamaEngine:
+    """사전학습 LaMa(big-lama torchscript) 기반 추론.
+
+    학습 데이터 없이도 SOTA 수준의 객체 제거/복원 품질을 낸다. Cleanup.pictures·IOPaint가
+    쓰는 그 엔진이며, big-lama.pt(약 205MB)가 있고 torch가 설치돼 있을 때만 로드된다.
+    """
+
+    name = "lama"
+    _MODEL = os.environ.get(
+        "LAMA_MODEL", os.path.join(os.path.dirname(__file__), "big-lama.pt")
+    )
+
+    def __init__(self):
+        import torch
+
+        if not os.path.exists(self._MODEL):
+            raise FileNotFoundError(f"LaMa 모델 없음: {self._MODEL}")
+        self._torch = torch
+        self.model = torch.jit.load(self._MODEL, map_location="cpu")
+        self.model.eval()
+
+    def _pad(self, x, mod=8):
+        _, _, h, w = x.shape
+        return self._torch.nn.functional.pad(
+            x, (0, (mod - w % mod) % mod, 0, (mod - h % mod) % mod), mode="reflect"
+        )
+
+    def inpaint(self, image_bgr: np.ndarray, mask: np.ndarray) -> np.ndarray:
+        torch = self._torch
+        h, w = image_bgr.shape[:2]
+
+        # 경계가 남지 않도록 마스크를 살짝 팽창
+        binary = (mask > 127).astype(np.uint8) * 255
+        binary = cv2.dilate(binary, np.ones((7, 7), np.uint8), iterations=1)
+
+        rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        it = torch.from_numpy(rgb).permute(2, 0, 1).unsqueeze(0).float() / 255.0
+        mt = torch.from_numpy(binary).unsqueeze(0).unsqueeze(0).float() / 255.0
+        mt = (mt >= 0.5).float()
+
+        with torch.inference_mode():
+            out = self.model(self._pad(it), self._pad(mt))
+        res = (out[0].permute(1, 2, 0).clamp(0, 1) * 255).byte().cpu().numpy()[:h, :w]
+        res_bgr = cv2.cvtColor(res, cv2.COLOR_RGB2BGR)
+
+        # 마스크 영역만 결과로 합성 → 나머지 원본 픽셀 보존
+        m3 = (binary[..., None] > 0)
+        return np.where(m3, res_bgr, image_bgr)
+
+
 def load_engine():
-    """가능한 엔진을 우선순위대로 로드한다."""
-    try:
-        return DeepFillEngine()
-    except Exception:
-        return OpenCVEngine()
+    """가능한 엔진을 우선순위대로 로드한다: DeepFill 체크포인트 → LaMa → Telea 폴백."""
+    for factory in (DeepFillEngine, LamaEngine):
+        try:
+            engine = factory()
+            print(f"[engine] loaded: {engine.name}")
+            return engine
+        except Exception as exc:  # noqa: BLE001
+            print(f"[engine] {factory.__name__} 사용 불가: {exc}")
+    print("[engine] loaded: opencv-telea (fallback)")
+    return OpenCVEngine()

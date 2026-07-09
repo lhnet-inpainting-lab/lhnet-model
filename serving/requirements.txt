@@ -3,3 +3,8 @@ uvicorn
 python-multipart
 opencv-python-headless
 numpy
+
+# LaMa 엔진(선택): torch가 있고 big-lama.pt(약 205MB)가 있으면 SOTA 품질로 추론.
+# 모델: https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt
+# 없으면 자동으로 OpenCV Telea 폴백으로 동작한다.
+torch
