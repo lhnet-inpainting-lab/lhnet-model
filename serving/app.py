@@ -17,6 +17,7 @@ from enhance import restore_faces
 from ocr import detect_text
 from people import segment_people
 from segment import grabcut_at
+from superres import upscale
 
 app = FastAPI(title="DeepFillv2 Inference Service")
 engine = load_engine()
@@ -89,6 +90,21 @@ async def redact(image: UploadFile = File(...)):
         media_type="image/png",
         headers={"X-Redacted-Count": str(len(detections))},
     )
+
+
+@app.post("/upscale")
+async def upscale_endpoint(image: UploadFile = File(...), scale: int = Form(2)):
+    """FSRCNN 초해상도로 scale배(2·4) 확대한 PNG를 반환한다."""
+    img = _decode(await image.read(), cv2.IMREAD_COLOR)
+    try:
+        result = upscale(img, scale)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    ok, encoded = cv2.imencode(".png", result)
+    if not ok:
+        raise HTTPException(status_code=500, detail="결과 인코딩에 실패했습니다.")
+    return Response(content=encoded.tobytes(), media_type="image/png")
 
 
 @app.post("/restore-faces")
