@@ -75,7 +75,23 @@ def detect_face_landmarks(image_bgr: np.ndarray) -> list[dict]:
     return out
 
 
+PLATE_MODEL = os.path.join(os.path.dirname(__file__), "plate_yolo11s.onnx")
+PLATE_INPUT = 640
+PLATE_SCORE_THRESHOLD = 0.35
+PLATE_NMS_THRESHOLD = 0.45
+
+_plate_session = None
 _plate_cascade = None
+
+
+def _get_plate_session():
+    """YOLO11 번호판 모델(있으면). 모델 파일이 없으면 None — 캐스케이드로 폴백."""
+    global _plate_session
+    if _plate_session is None and os.path.exists(PLATE_MODEL):
+        import onnxruntime as ort
+
+        _plate_session = ort.InferenceSession(PLATE_MODEL, providers=["CPUExecutionProvider"])
+    return _plate_session
 
 
 def _get_plate_cascade():
@@ -87,8 +103,47 @@ def _get_plate_cascade():
     return _plate_cascade
 
 
+def _detect_plates_yolo(session, image_bgr: np.ndarray) -> list[dict]:
+    """YOLO11 번호판 탐지: 레터박스 640 → 추론 → NMS → 원본 좌표 복원."""
+    h, w = image_bgr.shape[:2]
+    scale = min(PLATE_INPUT / w, PLATE_INPUT / h)
+    nw, nh = round(w * scale), round(h * scale)
+    pad_x, pad_y = (PLATE_INPUT - nw) / 2, (PLATE_INPUT - nh) / 2
+
+    canvas = np.full((PLATE_INPUT, PLATE_INPUT, 3), 114, np.uint8)
+    canvas[int(pad_y):int(pad_y) + nh, int(pad_x):int(pad_x) + nw] = cv2.resize(image_bgr, (nw, nh))
+    rgb = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    tensor = rgb.transpose(2, 0, 1)[np.newaxis]
+
+    with _lock:
+        pred = session.run(None, {"images": tensor})[0][0]  # (5, N): cx, cy, w, h, conf
+
+    keep = pred[4] >= PLATE_SCORE_THRESHOLD
+    boxes, scores = [], []
+    for cx, cy, bw, bh, conf in pred[:, keep].T:
+        x = (cx - bw / 2 - pad_x) / scale
+        y = (cy - bh / 2 - pad_y) / scale
+        boxes.append([int(x), int(y), int(bw / scale), int(bh / scale)])
+        scores.append(float(conf))
+
+    picked = cv2.dnn.NMSBoxes(boxes, scores, PLATE_SCORE_THRESHOLD, PLATE_NMS_THRESHOLD)
+    out = []
+    for i in np.array(picked).flatten():
+        x, y, bw, bh = boxes[i]
+        out.append({
+            "type": "plate",
+            "box": [max(0, x), max(0, y), min(bw, w), min(bh, h)],
+            "score": round(scores[i], 3),
+        })
+    return out
+
+
 def detect_plates(image_bgr: np.ndarray) -> list[dict]:
-    """차량 번호판 후보 목록(베타). 캐스케이드 기반이라 score는 고정값."""
+    """차량 번호판 목록. YOLO11 전용 모델을 쓰고, 모델이 없으면 캐스케이드(베타)로 폴백."""
+    session = _get_plate_session()
+    if session is not None:
+        return _detect_plates_yolo(session, image_bgr)
+
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
     with _lock:
         plates = _get_plate_cascade().detectMultiScale(gray, scaleFactor=1.08, minNeighbors=5, minSize=(50, 16))

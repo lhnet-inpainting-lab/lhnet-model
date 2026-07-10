@@ -17,4 +17,6 @@ easyocr
 
 # 얼굴 복원 — GFPGAN 1.4 ONNX (gfpgan_1.4.onnx 340MB 수동 다운로드 필요)
 # 모델: https://huggingface.co/facefusion/models-3.0.0/resolve/main/gfpgan_1.4.onnx
+# 번호판 탐지 — YOLO11s ONNX (plate_yolo11s.onnx 38MB, 없으면 캐스케이드 폴백)
+# 모델: https://huggingface.co/morsetechlab/yolov11-license-plate-detection/resolve/main/license-plate-finetune-v1s.onnx
 onnxruntime
