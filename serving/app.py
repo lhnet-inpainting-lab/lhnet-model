@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from detect import boxes_to_mask, detect_all, detect_faces, detect_plates
 from engine import load_engine
 from ocr import detect_text
+from people import segment_people
 from segment import grabcut_at
 
 app = FastAPI(title="DeepFillv2 Inference Service")
@@ -86,6 +87,22 @@ async def redact(image: UploadFile = File(...)):
         content=encoded.tobytes(),
         media_type="image/png",
         headers={"X-Redacted-Count": str(len(detections))},
+    )
+
+
+@app.post("/segment-people")
+async def segment_people_endpoint(image: UploadFile = File(...)):
+    """사람 실루엣 마스크 PNG(255=사람)를 반환한다. X-Person-Coverage 헤더에 화면 대비 비율."""
+    img = _decode(await image.read(), cv2.IMREAD_COLOR)
+    mask, coverage = segment_people(img)
+
+    ok, encoded = cv2.imencode(".png", mask)
+    if not ok:
+        raise HTTPException(status_code=500, detail="마스크 인코딩에 실패했습니다.")
+    return Response(
+        content=encoded.tobytes(),
+        media_type="image/png",
+        headers={"X-Person-Coverage": f"{coverage:.4f}"},
     )
 
 
