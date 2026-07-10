@@ -48,6 +48,33 @@ def detect_faces(image_bgr: np.ndarray) -> list[dict]:
     return out
 
 
+def detect_face_landmarks(image_bgr: np.ndarray) -> list[dict]:
+    """얼굴 박스와 5점 랜드마크 목록 반환 (원본 픽셀 좌표).
+
+    랜드마크 순서는 YuNet 그대로: 오른눈, 왼눈, 코끝, 오른입꼬리, 왼입꼬리
+    (화면 기준 왼쪽이 먼저) — 얼굴 복원의 FFHQ 템플릿 정렬에 쓴다.
+    """
+    h, w = image_bgr.shape[:2]
+    scale = min(1.0, 1280 / max(h, w))
+    img = cv2.resize(image_bgr, (int(w * scale), int(h * scale))) if scale < 1.0 else image_bgr
+
+    with _lock:
+        det = _get_detector()
+        det.setInputSize((img.shape[1], img.shape[0]))
+        _, faces = det.detect(img)
+
+    out = []
+    if faces is not None:
+        for f in faces:
+            x, y, bw, bh = f[:4] / scale
+            out.append({
+                "box": [max(0, int(x)), max(0, int(y)), int(bw), int(bh)],
+                "landmarks": (f[4:14].reshape(5, 2) / scale).tolist(),
+                "score": round(float(f[-1]), 3),
+            })
+    return out
+
+
 _plate_cascade = None
 
 

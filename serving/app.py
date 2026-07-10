@@ -13,6 +13,7 @@ from fastapi.responses import Response
 
 from detect import boxes_to_mask, detect_all, detect_faces, detect_plates
 from engine import load_engine
+from enhance import restore_faces
 from ocr import detect_text
 from people import segment_people
 from segment import grabcut_at
@@ -87,6 +88,22 @@ async def redact(image: UploadFile = File(...)):
         content=encoded.tobytes(),
         media_type="image/png",
         headers={"X-Redacted-Count": str(len(detections))},
+    )
+
+
+@app.post("/restore-faces")
+async def restore_faces_endpoint(image: UploadFile = File(...)):
+    """사진 속 모든 얼굴을 GFPGAN으로 복원한 PNG를 반환한다. X-Restored-Count 헤더에 얼굴 수."""
+    img = _decode(await image.read(), cv2.IMREAD_COLOR)
+    result, count = restore_faces(img)
+
+    ok, encoded = cv2.imencode(".png", result)
+    if not ok:
+        raise HTTPException(status_code=500, detail="결과 인코딩에 실패했습니다.")
+    return Response(
+        content=encoded.tobytes(),
+        media_type="image/png",
+        headers={"X-Restored-Count": str(count)},
     )
 
 
