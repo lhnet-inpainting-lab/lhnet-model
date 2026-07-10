@@ -11,8 +11,9 @@ import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
-from detect import boxes_to_mask, detect_all
+from detect import boxes_to_mask, detect_all, detect_faces, detect_plates
 from engine import load_engine
+from ocr import detect_text
 from segment import grabcut_at
 
 app = FastAPI(title="DeepFillv2 Inference Service")
@@ -47,11 +48,22 @@ async def inpaint(image: UploadFile = File(...), mask: UploadFile = File(...)):
     return Response(content=encoded.tobytes(), media_type="image/png")
 
 
+DETECTORS = {"face": detect_faces, "plate": detect_plates, "text": detect_text}
+
+
 @app.post("/detect")
-async def detect(image: UploadFile = File(...)):
-    """사진 속 개인정보 객체(얼굴·번호판)를 탐지해 좌표 목록을 반환한다."""
+async def detect(image: UploadFile = File(...), targets: str = Form("face,plate")):
+    """사진 속 개인정보(얼굴·번호판·텍스트)를 탐지해 좌표 목록을 반환한다.
+
+    targets: 쉼표로 구분한 탐지 대상 (face | plate | text). 기본값은 기존 동작과 같은 face,plate.
+    """
     img = _decode(await image.read(), cv2.IMREAD_COLOR)
-    detections = detect_all(img)
+    detections = []
+    for target in targets.split(","):
+        detector = DETECTORS.get(target.strip())
+        if detector is None:
+            raise HTTPException(status_code=400, detail=f"지원하지 않는 탐지 대상입니다: {target.strip()}")
+        detections += detector(img)
     return {"width": img.shape[1], "height": img.shape[0], "detections": detections}
 
 
