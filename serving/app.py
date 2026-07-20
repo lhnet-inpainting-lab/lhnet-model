@@ -14,7 +14,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from detect import boxes_to_mask, detect_all, detect_faces, detect_plates
-from engine import EngineManager
+from engines import EngineManager
 from enhance import restore_faces
 from ocr import detect_text
 from people import segment_people
