@@ -15,6 +15,10 @@ torchvision
 # 텍스트 개인정보 탐지 — EasyOCR (첫 호출 시 인식 모델 자동 다운로드)
 easyocr
 
+# DeepFillv2(PyTorch) 엔진 — 사전학습 가중치 states_tf_places2.pth(약 40MB) 자동 다운로드용
+# 모델 출처: https://github.com/nipponjo/deepfillv2-pytorch (converted weights, Places2)
+gdown
+
 # 얼굴 복원 — GFPGAN 1.4 ONNX (gfpgan_1.4.onnx 340MB 수동 다운로드 필요)
 # 모델: https://huggingface.co/facefusion/models-3.0.0/resolve/main/gfpgan_1.4.onnx
 # 번호판 탐지 — YOLO11s ONNX (plate_yolo11s.onnx 38MB, 없으면 캐스케이드 폴백)
