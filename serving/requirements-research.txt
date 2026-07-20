@@ -1,0 +1,14 @@
+# 연구모델(DeepFillv2 · GeneratorMultiColumn, TF) 엔진용 추가 의존성.
+#
+# TensorFlow는 Python 3.13 이하에서만 설치된다(3.14 휠 없음). 연구모델을 쓰려면
+# Python 3.12 등으로 별도 가상환경을 만들고 requirements.txt와 함께 설치한 뒤
+# 그 환경에서 uvicorn을 실행한다:
+#
+#   py -3.12 -m venv .venv312
+#   .venv312/Scripts/activate
+#   pip install -r requirements.txt -r requirements-research.txt
+#   uvicorn app:app --port 8000
+#
+# 학습 체크포인트(training_checkpoints/ckpt-*)를 model/serving/에 넣으면
+# 모델 선택기에 '연구모델'이 활성화된다. 경로는 DEEPFILL_CKPT_DIR로 바꿀 수 있다.
+tensorflow-cpu
